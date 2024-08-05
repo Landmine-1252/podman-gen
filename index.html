@@ -29,6 +29,12 @@
         .container {
             max-width: 800px;
         }
+        .hidden {
+            display: none;
+        }
+        .error {
+            color: red;
+        }
     </style>
 </head>
 <body>
@@ -36,18 +42,31 @@
         <h1 class="mb-4">Podman Command Builder</h1>
         <div class="section">
             <label for="image">Image:</label>
-            <input type="text" class="form-control" id="image" placeholder="e.g., docker.io/jellyfin/jellyfin:latest">
+            <input type="text" class="form-control" id="image" placeholder="e.g., jellyfin/jellyfin:latest" required>
             <small class="form-text text-muted">Docker image to use for the container.</small>
+            <div id="image-error" class="error hidden">Image name is required.</div>
         </div>
         <div class="section">
             <label for="name">Container Name:</label>
-            <input type="text" class="form-control" id="name" placeholder="e.g., myjellyfin">
+            <input type="text" class="form-control" id="name" placeholder="e.g., myjellyfin" required>
             <small class="form-text text-muted">Unique name for the container.</small>
+            <div id="name-error" class="error hidden">Container name is required.</div>
         </div>
         <div class="section">
             <label for="labels">Labels:</label>
-            <textarea class="form-control" id="labels" placeholder='e.g., {"io.containers.autoupdate":"registry", "project":"media"}'></textarea>
+            <div id="labels-container"></div>
+            <button class="btn btn-secondary" onclick="addLabelField()">Add Label</button>
+            <button class="btn btn-secondary" onclick="addCommonLabel('io.containers.autoupdate', 'registry')">Add Autoupdate Label</button>
+            <button class="btn btn-secondary" onclick="addCommonLabel('project', 'myproject')">Add Project Label</button>
             <small class="form-text text-muted">JSON object with labels for the container.</small>
+        </div>
+        <div class="section">
+            <label for="timezone">Timezone:</label>
+            <select class="form-control" id="timezone">
+                <!-- Timezone options will be dynamically populated -->
+            </select>
+            <small class="form-text text-muted">Set the timezone for the container.</small>
+            <input type="text" class="form-control mt-2 hidden" id="custom-timezone" placeholder="Enter custom timezone">
         </div>
         <div class="section">
             <label>Ports:</label>
@@ -68,16 +87,22 @@
             <small class="form-text text-muted">Set environment variables for the container.</small>
         </div>
         <div class="section">
-            <label for="timezone">Timezone:</label>
-            <select class="form-control" id="timezone"></select>
-            <small class="form-text text-muted">Set the timezone for the container.</small>
-        </div>
-        <div class="section">
             <button class="btn btn-primary" onclick="generateCommand()">Generate Podman Command</button>
             <button class="btn btn-primary" onclick="generateQuadlet()">Generate Quadlet File</button>
         </div>
-        <div id="output" class="section command-output"></div>
-        <div id="quadlet-output" class="section command-output"></div>
+        <div id="output-container" class="hidden">
+            <div class="section">
+                <button class="btn btn-secondary" onclick="copyToClipboard('output')">Copy All</button>
+                <div id="output" class="command-output"></div>
+            </div>
+        </div>
+        <div id="quadlet-output-container" class="hidden">
+            <div class="section">
+                <button class="btn btn-secondary" onclick="copyToClipboard('quadlet-output')">Copy All</button>
+                <div id="quadlet-output" class="command-output"></div>
+                <button class="btn btn-secondary" onclick="downloadQuadlet()">Download Quadlet File</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -85,19 +110,58 @@
         function populateTimezones() {
             const timezoneSelect = document.getElementById('timezone');
             const timezones = [
-                { value: 'America/Los_Angeles', label: 'America/Los_Angeles (PST)' },
-                { value: 'America/New_York', label: 'America/New_York (EST)' },
-                { value: 'Europe/London', label: 'Europe/London (GMT)' },
-                { value: 'Asia/Tokyo', label: 'Asia/Tokyo (JST)' },
+                'America/New_York',
+                'America/Chicago',
+                'America/Denver',
+                'America/Los_Angeles',
+                'America/Anchorage',
+                'Pacific/Honolulu',
+                'Europe/London',
+                'Europe/Paris',
+                'Asia/Tokyo',
+                'Australia/Sydney'
                 // Add more timezones as needed
             ];
             timezones.forEach(tz => {
                 const option = document.createElement('option');
-                option.value = tz.value;
-                option.textContent = `${tz.label} - ${new Date().toLocaleString('en-US', { timeZone: tz.value })}`;
+                option.value = tz;
+                option.textContent = `${tz} - ${new Date().toLocaleString('en-US', { timeZone: tz })}`;
                 timezoneSelect.appendChild(option);
             });
             timezoneSelect.value = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+            const customOption = document.createElement('option');
+            customOption.value = 'custom';
+            customOption.textContent = 'Other (Specify Below)';
+            timezoneSelect.appendChild(customOption);
+
+            timezoneSelect.addEventListener('change', () => {
+                document.getElementById('custom-timezone').classList.toggle('hidden', timezoneSelect.value !== 'custom');
+            });
+        }
+
+        // Add label field
+        function addLabelField(key = '', value = '') {
+            const container = document.getElementById('labels-container');
+            const div = document.createElement('div');
+            div.className = 'form-row align-items-center mb-2';
+            div.innerHTML = `
+                <div class="col">
+                    <input type="text" class="form-control" placeholder="Key" value="${key}">
+                </div>
+                <div class="col">
+                    <input type="text" class="form-control" placeholder="Value" value="${value}">
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-danger remove-btn" onclick="removeField(this)">Remove</button>
+                </div>
+            `;
+            container.appendChild(div);
+        }
+
+        // Add common label
+        function addCommonLabel(key, value) {
+            addLabelField(key, value);
         }
 
         // Add port field
@@ -174,56 +238,99 @@
             button.parentElement.parentElement.remove();
         }
 
+        // Validate and sanitize image name
+        function getImageName() {
+            const imageInput = document.getElementById('image');
+            let image = imageInput.value.trim();
+            if (!image.includes('/') && !image.startsWith('docker.io/')) {
+                image = `docker.io/${image}`;
+            }
+            return image;
+        }
+
         // Generate Podman command
         function generateCommand() {
-            const image = document.getElementById('image').value;
-            const name = document.getElementById('name').value;
-            const labels = document.getElementById('labels').value;
+            const image = getImageName();
+            const name = document.getElementById('name').value.trim();
+            const labels = document.getElementById('labels-container').querySelectorAll('.form-row');
             const ports = document.getElementById('ports-container').querySelectorAll('.form-row');
             const mounts = document.getElementById('mounts-container').querySelectorAll('.form-row');
             const envs = document.getElementById('envs-container').querySelectorAll('.form-row');
-            const timezone = document.getElementById('timezone').value;
+            const timezoneSelect = document.getElementById('timezone');
+            const customTimezone = document.getElementById('custom-timezone').value.trim();
+            const timezone = timezoneSelect.value === 'custom' ? customTimezone : timezoneSelect.value;
+
+            if (!image) {
+                document.getElementById('image-error').classList.remove('hidden');
+                return;
+            } else {
+                document.getElementById('image-error').classList.add('hidden');
+            }
+
+            if (!name) {
+                document.getElementById('name-error').classList.remove('hidden');
+                return;
+            } else {
+                document.getElementById('name-error').classList.add('hidden');
+            }
+
+            if (!timezone) {
+                alert('Please select or enter a timezone.');
+                return;
+            }
 
             let command = `podman run \\\n --detach \\\n --name ${name} \\\n`;
 
-            if (labels) {
-                const labelObj = JSON.parse(labels);
-                for (const [key, value] of Object.entries(labelObj)) {
+            labels.forEach(labelRow => {
+                const key = labelRow.children[0].children[0].value.trim();
+                const value = labelRow.children[1].children[0].value.trim();
+                if (key && value) {
                     command += ` --label "${key}=${value}" \\\n`;
                 }
-            }
+            });
 
             ports.forEach(portRow => {
-                const hostPort = portRow.children[0].children[0].value;
-                const containerPort = portRow.children[1].children[0].value;
-                const protocol = portRow.children[2].children[0].value;
-                command += ` --publish ${hostPort}:${containerPort}/${protocol} \\\n`;
+                const hostPort = portRow.children[0].children[0].value.trim();
+                const containerPort = portRow.children[1].children[0].value.trim();
+                const protocol = portRow.children[2].children[0].value.trim();
+                if (hostPort && containerPort) {
+                    command += ` --publish ${hostPort}:${containerPort}/${protocol} \\\n`;
+                }
             });
 
             mounts.forEach(mountRow => {
-                const type = mountRow.children[0].children[0].value;
-                const source = mountRow.children[1].children[0].value;
-                const destination = mountRow.children[2].children[0].value;
-                const options = mountRow.children[3].children[0].value;
-                command += ` --mount type=${type},source=${source},destination=${destination},${options} \\\n`;
+                const type = mountRow.children[0].children[0].value.trim();
+                const source = mountRow.children[1].children[0].value.trim();
+                const destination = mountRow.children[2].children[0].value.trim();
+                const options = mountRow.children[3].children[0].value.trim();
+                if (type && source && destination) {
+                    command += ` --mount type=${type},source=${source},destination=${destination},${options} \\\n`;
+                }
             });
 
             envs.forEach(envRow => {
-                const variable = envRow.children[0].children[0].value;
-                const value = envRow.children[1].children[0].value;
-                command += ` --env ${variable}=${value} \\\n`;
+                const variable = envRow.children[0].children[0].value.trim();
+                const value = envRow.children[1].children[0].value.trim();
+                if (variable && value) {
+                    command += ` --env ${variable}=${value} \\\n`;
+                }
             });
 
             command += ` --env TZ=${timezone} \\\n`;
             command += ` --rm \\\n --user $(id -u):$(id -g) \\\n --userns keep-id \\\n ${image}`;
 
             document.getElementById('output').textContent = command;
+            document.getElementById('output-container').classList.remove('hidden');
         }
 
         // Generate Quadlet file
         function generateQuadlet() {
-            const name = document.getElementById('name').value;
+            const name = document.getElementById('name').value.trim();
             const command = document.getElementById('output').textContent;
+            if (!command) {
+                alert('Please generate the Podman command first.');
+                return;
+            }
             const quadletContent = `[Unit]
 Description=${name}
 
@@ -235,14 +342,34 @@ PodmanArguments=
 `;
 
             document.getElementById('quadlet-output').textContent = quadletContent;
+            document.getElementById('quadlet-output-container').classList.remove('hidden');
+        }
+
+        // Copy to clipboard
+        function copyToClipboard(elementId) {
+            const content = document.getElementById(elementId).textContent;
+            navigator.clipboard.writeText(content).then(() => {
+                alert('Copied to clipboard');
+            }).catch(err => {
+                alert('Failed to copy: ', err);
+            });
+        }
+
+        // Download Quadlet file
+        function downloadQuadlet() {
+            const content = document.getElementById('quadlet-output').textContent;
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'quadlet.service';
+            a.click();
+            URL.revokeObjectURL(url);
         }
 
         // Initialize page
         document.addEventListener('DOMContentLoaded', () => {
             populateTimezones();
-            addPortField();
-            addMountField();
-            addEnvField();
         });
     </script>
 </body>
