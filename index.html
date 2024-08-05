@@ -234,14 +234,16 @@
         function updateMountOptions(select) {
             const optionsContainer = select.parentElement.nextElementSibling.nextElementSibling.nextElementSibling;
             const type = select.value;
+            const checkboxes = optionsContainer.querySelectorAll('.form-check-input');
             if (type === 'volume' || type === 'tmpfs') {
-                optionsContainer.querySelector('.form-check-input[value="ro=true"]').disabled = true;
-                optionsContainer.querySelector('.form-check-input[value="Z"]').disabled = true;
-                optionsContainer.querySelector('.form-check-input[value="z"]').disabled = true;
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked = false;
+                    checkbox.disabled = true;
+                });
             } else {
-                optionsContainer.querySelector('.form-check-input[value="ro=true"]').disabled = false;
-                optionsContainer.querySelector('.form-check-input[value="Z"]').disabled = false;
-                optionsContainer.querySelector('.form-check-input[value="z"]').disabled = false;
+                checkboxes.forEach(checkbox => {
+                    checkbox.disabled = false;
+                });
             }
         }
 
@@ -273,7 +275,7 @@
         function getImageName() {
             const imageInput = document.getElementById('image');
             let image = imageInput.value.trim();
-            if (!image.includes('/') && !image.startsWith('docker.io/')) {
+            if (!image.includes('/')) {
                 image = `docker.io/${image}`;
             }
             return image;
@@ -333,7 +335,10 @@
                 const type = mountRow.children[0].children[0].value.trim();
                 const source = mountRow.children[1].children[0].value.trim();
                 const destination = mountRow.children[2].children[0].value.trim();
-                const options = Array.from(mountRow.children[3].querySelectorAll('.form-check-input:checked')).map(cb => cb.value).join(',');
+                const options = Array.from(mountRow.children[3].querySelectorAll('.form-check-input:checked'))
+                    .filter(cb => !cb.disabled)
+                    .map(cb => cb.value)
+                    .join(',');
                 if (type && source && destination) {
                     command += ` --mount type=${type},source=${source},destination=${destination}${options ? ',' + options : ''} \\\n`;
                 }
