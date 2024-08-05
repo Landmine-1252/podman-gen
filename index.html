@@ -8,74 +8,74 @@
     <style>
         body {
             padding: 20px;
+            background-color: #f8f9fa;
         }
         .section {
             margin-bottom: 20px;
         }
         .command-output {
             white-space: pre-wrap;
-            background: #f4f4f4;
+            background: #ffffff;
             padding: 10px;
             border: 1px solid #ddd;
+            margin-top: 20px;
+        }
+        .remove-btn {
+            cursor: pointer;
+        }
+        .form-control, .btn {
+            margin-bottom: 10px;
+        }
+        .container {
+            max-width: 800px;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1 class="mb-4">Podman Command Builder</h1>
-
         <div class="section">
             <label for="image">Image:</label>
             <input type="text" class="form-control" id="image" placeholder="e.g., docker.io/jellyfin/jellyfin:latest">
             <small class="form-text text-muted">Docker image to use for the container.</small>
         </div>
-
         <div class="section">
             <label for="name">Container Name:</label>
             <input type="text" class="form-control" id="name" placeholder="e.g., myjellyfin">
             <small class="form-text text-muted">Unique name for the container.</small>
         </div>
-
         <div class="section">
             <label for="labels">Labels:</label>
             <textarea class="form-control" id="labels" placeholder='e.g., {"io.containers.autoupdate":"registry", "project":"media"}'></textarea>
             <small class="form-text text-muted">JSON object with labels for the container.</small>
         </div>
-
         <div class="section">
             <label>Ports:</label>
             <div id="ports-container"></div>
             <button class="btn btn-secondary" onclick="addPortField()">Add Port</button>
             <small class="form-text text-muted">Map host ports to container ports.</small>
         </div>
-
         <div class="section">
             <label>Mounts:</label>
             <div id="mounts-container"></div>
             <button class="btn btn-secondary" onclick="addMountField()">Add Mount</button>
             <small class="form-text text-muted">Define volume mounts or bind mounts.</small>
         </div>
-
         <div class="section">
             <label>Environment Variables:</label>
             <div id="envs-container"></div>
             <button class="btn btn-secondary" onclick="addEnvField()">Add Environment Variable</button>
             <small class="form-text text-muted">Set environment variables for the container.</small>
         </div>
-
         <div class="section">
             <label for="timezone">Timezone:</label>
-            <select class="form-control" id="timezone">
-                <!-- Timezone options will be dynamically populated -->
-            </select>
+            <select class="form-control" id="timezone"></select>
             <small class="form-text text-muted">Set the timezone for the container.</small>
         </div>
-
         <div class="section">
             <button class="btn btn-primary" onclick="generateCommand()">Generate Podman Command</button>
             <button class="btn btn-primary" onclick="generateQuadlet()">Generate Quadlet File</button>
         </div>
-
         <div id="output" class="section command-output"></div>
         <div id="quadlet-output" class="section command-output"></div>
     </div>
@@ -119,7 +119,7 @@
                     </select>
                 </div>
                 <div class="col-auto">
-                    <button class="btn btn-danger" onclick="removeField(this)">Remove</button>
+                    <button class="btn btn-danger remove-btn" onclick="removeField(this)">Remove</button>
                 </div>
             `;
             container.appendChild(div);
@@ -144,7 +144,7 @@
                     <input type="text" class="form-control" placeholder="Options (e.g., ro=true)">
                 </div>
                 <div class="col-auto">
-                    <button class="btn btn-danger" onclick="removeField(this)">Remove</button>
+                    <button class="btn btn-danger remove-btn" onclick="removeField(this)">Remove</button>
                 </div>
             `;
             container.appendChild(div);
@@ -163,7 +163,7 @@
                     <input type="text" class="form-control" placeholder="Value">
                 </div>
                 <div class="col-auto">
-                    <button class="btn btn-danger" onclick="removeField(this)">Remove</button>
+                    <button class="btn btn-danger remove-btn" onclick="removeField(this)">Remove</button>
                 </div>
             `;
             container.appendChild(div);
