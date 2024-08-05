@@ -196,7 +196,11 @@
             div.className = 'form-row align-items-center mb-2';
             div.innerHTML = `
                 <div class="col">
-                    <input type="text" class="form-control" placeholder="Type (e.g., bind)">
+                    <select class="form-control">
+                        <option value="bind">Bind</option>
+                        <option value="volume">Volume</option>
+                        <option value="tmpfs">Tmpfs</option>
+                    </select>
                 </div>
                 <div class="col">
                     <input type="text" class="form-control" placeholder="Source Path">
@@ -205,7 +209,18 @@
                     <input type="text" class="form-control" placeholder="Destination Path">
                 </div>
                 <div class="col">
-                    <input type="text" class="form-control" placeholder="Options (e.g., ro=true)">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="ro=true">
+                        <label class="form-check-label">Read-only</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="Z">
+                        <label class="form-check-label">Private (Z)</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="z">
+                        <label class="form-check-label">Shared (z)</label>
+                    </div>
                 </div>
                 <div class="col-auto">
                     <button class="btn btn-danger remove-btn" onclick="removeField(this)">Remove</button>
@@ -302,9 +317,9 @@
                 const type = mountRow.children[0].children[0].value.trim();
                 const source = mountRow.children[1].children[0].value.trim();
                 const destination = mountRow.children[2].children[0].value.trim();
-                const options = mountRow.children[3].children[0].value.trim();
+                const options = Array.from(mountRow.children[3].querySelectorAll('.form-check-input:checked')).map(cb => cb.value).join(',');
                 if (type && source && destination) {
-                    command += ` --mount type=${type},source=${source},destination=${destination},${options} \\\n`;
+                    command += ` --mount type=${type},source=${source},destination=${destination}${options ? ',' + options : ''} \\\n`;
                 }
             });
 
