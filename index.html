@@ -92,13 +92,13 @@
         </div>
         <div id="output-container" class="hidden">
             <div class="section">
-                <button class="btn btn-secondary" onclick="copyToClipboard('output')">Copy All</button>
+                <button class="btn btn-secondary" onclick="copyToClipboard('output')">Copy Podman Command</button>
                 <div id="output" class="command-output"></div>
             </div>
         </div>
         <div id="quadlet-output-container" class="hidden">
             <div class="section">
-                <button class="btn btn-secondary" onclick="copyToClipboard('quadlet-output')">Copy All</button>
+                <button class="btn btn-secondary" onclick="copyToClipboard('quadlet-output')">Copy Quadlet File</button>
                 <div id="quadlet-output" class="command-output"></div>
                 <button class="btn btn-secondary" onclick="downloadQuadlet()">Download Quadlet File</button>
             </div>
@@ -196,7 +196,7 @@
             div.className = 'form-row align-items-center mb-2';
             div.innerHTML = `
                 <div class="col">
-                    <select class="form-control">
+                    <select class="form-control" onchange="updateMountOptions(this)">
                         <option value="bind">Bind</option>
                         <option value="volume">Volume</option>
                         <option value="tmpfs">Tmpfs</option>
@@ -214,11 +214,11 @@
                         <label class="form-check-label">Read-only</label>
                     </div>
                     <div class="form-check">
-                        <input class="form-check-input" type="checkbox" value="Z">
+                        <input class="form-check-input" type="radio" name="selinux-${container.children.length}" value="Z">
                         <label class="form-check-label">Private (Z)</label>
                     </div>
                     <div class="form-check">
-                        <input class="form-check-input" type="checkbox" value="z">
+                        <input class="form-check-input" type="radio" name="selinux-${container.children.length}" value="z">
                         <label class="form-check-label">Shared (z)</label>
                     </div>
                 </div>
@@ -227,6 +227,22 @@
                 </div>
             `;
             container.appendChild(div);
+            updateMountOptions(div.querySelector('select'));
+        }
+
+        // Update mount options based on selected type
+        function updateMountOptions(select) {
+            const optionsContainer = select.parentElement.nextElementSibling.nextElementSibling.nextElementSibling;
+            const type = select.value;
+            if (type === 'volume' || type === 'tmpfs') {
+                optionsContainer.querySelector('.form-check-input[value="ro=true"]').disabled = true;
+                optionsContainer.querySelector('.form-check-input[value="Z"]').disabled = true;
+                optionsContainer.querySelector('.form-check-input[value="z"]').disabled = true;
+            } else {
+                optionsContainer.querySelector('.form-check-input[value="ro=true"]').disabled = false;
+                optionsContainer.querySelector('.form-check-input[value="Z"]').disabled = false;
+                optionsContainer.querySelector('.form-check-input[value="z"]').disabled = false;
+            }
         }
 
         // Add environment variable field
@@ -364,7 +380,7 @@ PodmanArguments=
         function copyToClipboard(elementId) {
             const content = document.getElementById(elementId).textContent;
             navigator.clipboard.writeText(content).then(() => {
-                alert('Copied to clipboard');
+                alert(`Copied ${elementId === 'output' ? 'Podman Command' : 'Quadlet File'} to clipboard`);
             }).catch(err => {
                 alert('Failed to copy: ', err);
             });
@@ -373,11 +389,12 @@ PodmanArguments=
         // Download Quadlet file
         function downloadQuadlet() {
             const content = document.getElementById('quadlet-output').textContent;
+            const name = document.getElementById('name').value.trim();
             const blob = new Blob([content], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'quadlet.service';
+            a.download = `${name}.service`;
             a.click();
             URL.revokeObjectURL(url);
         }
