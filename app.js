@@ -38,7 +38,12 @@ const fields = {
     timezone: document.getElementById("timezone"),
     userns: document.getElementById("userns"),
     restartPolicy: document.getElementById("restartPolicy"),
-    timeoutStartSec: document.getElementById("timeoutStartSec")
+    timeoutStartSec: document.getElementById("timeoutStartSec"),
+    startMode: document.getElementById("startMode"),
+    afterUnits: document.getElementById("afterUnits"),
+    wantsUnits: document.getElementById("wantsUnits"),
+    requiresUnits: document.getElementById("requiresUnits"),
+    requiresMountsFor: document.getElementById("requiresMountsFor")
 };
 
 const collections = {
@@ -116,6 +121,11 @@ function defaultState() {
         userns: "",
         restartPolicy: "on-failure",
         timeoutStartSec: "900",
+        startMode: "enabled",
+        afterUnits: "",
+        wantsUnits: "",
+        requiresUnits: "",
+        requiresMountsFor: "",
         ports: [],
         mounts: [],
         envs: [],
@@ -161,6 +171,11 @@ function hydrateForm(state) {
     fields.userns.value = state.userns || "";
     fields.restartPolicy.value = state.restartPolicy || "on-failure";
     fields.timeoutStartSec.value = state.timeoutStartSec || "900";
+    fields.startMode.value = state.startMode || "enabled";
+    fields.afterUnits.value = state.afterUnits || "";
+    fields.wantsUnits.value = state.wantsUnits || "";
+    fields.requiresUnits.value = state.requiresUnits || "";
+    fields.requiresMountsFor.value = state.requiresMountsFor || "";
 
     Object.values(collections).forEach(container => {
         container.replaceChildren();
@@ -330,6 +345,11 @@ function collectState() {
         userns: fields.userns.value,
         restartPolicy: fields.restartPolicy.value,
         timeoutStartSec: fields.timeoutStartSec.value.trim(),
+        startMode: fields.startMode.value,
+        afterUnits: fields.afterUnits.value.trim(),
+        wantsUnits: fields.wantsUnits.value.trim(),
+        requiresUnits: fields.requiresUnits.value.trim(),
+        requiresMountsFor: fields.requiresMountsFor.value.trim(),
         ports: collectCollection("port", readPortRow, isBlankPortRow),
         mounts: collectCollection("mount", readMountRow, isBlankMountRow),
         envs: collectCollection("env", readPairRow, isBlankPairRow),
@@ -490,6 +510,14 @@ function buildResult(state) {
         notes.push("keep-id is often useful with bind mounts, but some images expect to run as their baked-in container user.");
     }
 
+    if (state.startMode === "manual") {
+        notes.push("Manual start mode omits [Install], so the generated install steps use start instead of enable --now.");
+    }
+
+    if (state.afterUnits || state.wantsUnits || state.requiresUnits || state.requiresMountsFor) {
+        notes.push("The startup dependency fields only affect the Quadlet file and install hints. The podman run command stays independent.");
+    }
+
     if (state.mounts.some(mount => mount.type !== "tmpfs" && mount.source.startsWith("."))) {
         notes.push("Relative mount sources are resolved differently: Quadlet treats them as relative to the unit file, while podman run treats them as relative to the current shell directory.");
     }
@@ -582,14 +610,34 @@ function renderCommand(state, imageInfo) {
 
 function renderQuadlet(state, imageInfo) {
     const description = sanitizeInlineValue(state.description || state.name + " container");
+    const afterUnits = parseListField(state.afterUnits);
+    const wantsUnits = parseListField(state.wantsUnits);
+    const requiresUnits = parseListField(state.requiresUnits);
+    const requiresMountsFor = parseListField(state.requiresMountsFor);
     const lines = [
         "[Unit]",
-        "Description=" + description,
-        "",
-        "[Container]",
-        "Image=" + imageInfo.normalized,
-        "ContainerName=" + state.name
+        "Description=" + description
     ];
+
+    afterUnits.forEach(unit => {
+        lines.push("After=" + unit);
+    });
+
+    wantsUnits.forEach(unit => {
+        lines.push("Wants=" + unit);
+    });
+
+    requiresUnits.forEach(unit => {
+        lines.push("Requires=" + unit);
+    });
+
+    if (requiresMountsFor.length > 0) {
+        lines.push("RequiresMountsFor=" + requiresMountsFor.join(" "));
+    }
+
+    lines.push("", "[Container]",
+        "Image=" + imageInfo.normalized,
+        "ContainerName=" + state.name);
 
     if (state.autoupdate !== "disabled") {
         lines.push("AutoUpdate=" + state.autoupdate);
@@ -633,13 +681,22 @@ function renderQuadlet(state, imageInfo) {
         lines.push("TimeoutStartSec=" + state.timeoutStartSec);
     }
 
-    lines.push("", "[Install]");
-    lines.push("WantedBy=" + (state.target === "rootful" ? "multi-user.target" : "default.target"));
+    if (state.startMode === "enabled") {
+        lines.push("", "[Install]");
+        lines.push("WantedBy=" + (state.target === "rootful" ? "multi-user.target" : "default.target"));
+    }
+
     return lines.join("\n");
 }
 
 function renderInstall(state) {
     const filename = state.name + ".container";
+    const startCommand = state.target === "rootful"
+        ? "sudo systemctl start " + state.name + ".service"
+        : "systemctl --user start " + state.name + ".service";
+    const enableCommand = state.target === "rootful"
+        ? "sudo systemctl enable --now " + state.name + ".service"
+        : "systemctl --user enable --now " + state.name + ".service";
 
     if (state.target === "rootful") {
         const lines = [
@@ -647,9 +704,10 @@ function renderInstall(state) {
             "",
             "sudo mkdir -p /etc/containers/systemd",
             "# write " + filename + " to the path above",
-            "sudo systemctl daemon-reload",
-            "sudo systemctl enable --now " + state.name + ".service"
+            "sudo systemctl daemon-reload"
         ];
+
+        lines.push(state.startMode === "enabled" ? enableCommand : startCommand);
 
         if (state.autoupdate !== "disabled") {
             lines.push("sudo systemctl enable --now podman-auto-update.timer");
@@ -663,9 +721,10 @@ function renderInstall(state) {
         "",
         "mkdir -p ~/.config/containers/systemd",
         "# write " + filename + " to the path above",
-        "systemctl --user daemon-reload",
-        "systemctl --user enable --now " + state.name + ".service"
+        "systemctl --user daemon-reload"
     ];
+
+    lines.push(state.startMode === "enabled" ? enableCommand : startCommand);
 
     if (state.autoupdate !== "disabled") {
         lines.push("systemctl --user enable --now podman-auto-update.timer");
@@ -714,6 +773,17 @@ function systemdQuote(value) {
 
 function dedupeNotes(notes) {
     return Array.from(new Set(notes));
+}
+
+function parseListField(value) {
+    return Array.from(
+        new Set(
+            value
+                .split(/[\s,]+/)
+                .map(item => item.trim())
+                .filter(Boolean)
+        )
+    );
 }
 
 function renderValidation(errors) {
@@ -806,6 +876,11 @@ function exampleState() {
         userns: "keep-id",
         restartPolicy: "on-failure",
         timeoutStartSec: "900",
+        startMode: "enabled",
+        afterUnits: "local-fs.target",
+        wantsUnits: "",
+        requiresUnits: "",
+        requiresMountsFor: "/srv/jellyfin/config /srv/jellyfin/cache",
         ports: [
             {
                 hostIp: "",

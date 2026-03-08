@@ -14,9 +14,10 @@
             <p class="eyebrow">Dependency-free static app</p>
             <h1>Podman + Quadlet Builder</h1>
             <p class="lede">
-                Build a copy-pasteable <code>podman run</code> command and a real Quadlet
-                <code>.container</code> file from the same form. The page stays easy to host on
-                GitHub Pages or GitLab Pages because it uses plain local HTML, CSS, and JavaScript assets.
+                Build a real Quadlet <code>.container</code> file directly from the form, with an
+                optional companion <code>podman run</code> command when you want it. The page stays
+                easy to host on GitHub Pages or GitLab Pages because it uses plain local HTML, CSS,
+                and JavaScript assets.
             </p>
             <div class="hero-grid">
                 <article class="note">
@@ -139,6 +140,45 @@
                 <section class="panel">
                     <div class="panel-head">
                         <div>
+                            <h2>Unit Startup</h2>
+                            <p class="hint">These settings affect the Quadlet file and install hints only. Quadlet already adds its normal network defaults.</p>
+                        </div>
+                    </div>
+                    <div class="field-grid">
+                        <div class="field">
+                            <label for="startMode">Start mode</label>
+                            <select id="startMode">
+                                <option value="enabled">Start automatically</option>
+                                <option value="manual">Manual start only</option>
+                            </select>
+                            <p class="hint">Automatic adds <code>[Install]</code> and an enable step. Manual keeps the unit disabled by default.</p>
+                        </div>
+                        <div class="field">
+                            <label for="afterUnits">Start after</label>
+                            <input id="afterUnits" type="text" placeholder="tailscaled.service local-fs.target" autocomplete="off" spellcheck="false">
+                            <p class="hint">Optional extra ordering. Separate units with spaces or commas.</p>
+                        </div>
+                        <div class="field">
+                            <label for="wantsUnits">Soft dependencies</label>
+                            <input id="wantsUnits" type="text" placeholder="postgres.service" autocomplete="off" spellcheck="false">
+                            <p class="hint">Adds <code>Wants=</code> in <code>[Unit]</code>.</p>
+                        </div>
+                        <div class="field">
+                            <label for="requiresUnits">Required dependencies</label>
+                            <input id="requiresUnits" type="text" placeholder="network-online.target" autocomplete="off" spellcheck="false">
+                            <p class="hint">Adds <code>Requires=</code> in <code>[Unit]</code>.</p>
+                        </div>
+                        <div class="field full">
+                            <label for="requiresMountsFor">Required host paths</label>
+                            <input id="requiresMountsFor" type="text" placeholder="/srv/media /srv/config" autocomplete="off" spellcheck="false">
+                            <p class="hint">Adds <code>RequiresMountsFor=</code> so systemd waits for those mount points before starting the container.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-head">
+                        <div>
                             <h2>Ports</h2>
                             <p class="hint">Leave host port blank to let Podman choose one automatically.</p>
                         </div>
@@ -216,21 +256,8 @@
                 <section class="panel output-panel">
                     <div class="panel-head">
                         <div>
-                            <h2>Podman Command</h2>
-                            <p class="meta">Generated from the same inputs as the Quadlet file.</p>
-                        </div>
-                    </div>
-                    <div class="actions">
-                        <button class="primary" type="button" data-action="copy-command">Copy command</button>
-                    </div>
-                    <pre id="command-output">Fill in a name and image to generate a command.</pre>
-                </section>
-
-                <section class="panel output-panel">
-                    <div class="panel-head">
-                        <div>
                             <h2>Quadlet File</h2>
-                            <p class="meta">Saved as <code>&lt;name&gt;.container</code>.</p>
+                            <p class="meta">Generated directly from the form. You do not need the podman command first.</p>
                         </div>
                     </div>
                     <div class="actions">
@@ -251,6 +278,19 @@
                         <button class="secondary" type="button" data-action="copy-install">Copy install steps</button>
                     </div>
                     <pre id="install-output">Install steps appear once the required fields are valid.</pre>
+                </section>
+
+                <section class="panel output-panel">
+                    <div class="panel-head">
+                        <div>
+                            <h2>Podman Command</h2>
+                            <p class="meta">Optional companion command generated from the same inputs.</p>
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <button class="primary" type="button" data-action="copy-command">Copy command</button>
+                    </div>
+                    <pre id="command-output">Fill in a name and image to generate a command.</pre>
                 </section>
 
                 <p id="status" class="status" aria-live="polite"></p>
