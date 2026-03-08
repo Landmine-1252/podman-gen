@@ -3,411 +3,358 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Podman Command Builder</title>
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body {
-            padding: 20px;
-            background-color: #f8f9fa;
-        }
-        .section {
-            margin-bottom: 20px;
-        }
-        .command-output {
-            white-space: pre-wrap;
-            background: #ffffff;
-            padding: 10px;
-            border: 1px solid #ddd;
-            margin-top: 20px;
-        }
-        .remove-btn {
-            cursor: pointer;
-        }
-        .form-control, .btn {
-            margin-bottom: 10px;
-        }
-        .container {
-            max-width: 800px;
-        }
-        .hidden {
-            display: none;
-        }
-        .error {
-            color: red;
-        }
-    </style>
+    <meta name="description" content="Build podman run commands and Quadlet .container files from one static page.">
+    <meta name="color-scheme" content="light">
+    <title>Podman + Quadlet Builder</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container">
-        <h1 class="mb-4">Podman Command Builder</h1>
-        <div class="section">
-            <label for="image">Image:</label>
-            <input type="text" class="form-control" id="image" placeholder="e.g., jellyfin/jellyfin:latest" required>
-            <small class="form-text text-muted">Docker image to use for the container.</small>
-            <div id="image-error" class="error hidden">Image name is required.</div>
-        </div>
-        <div class="section">
-            <label for="name">Container Name:</label>
-            <input type="text" class="form-control" id="name" placeholder="e.g., myjellyfin" required>
-            <small class="form-text text-muted">Unique name for the container.</small>
-            <div id="name-error" class="error hidden">Container name is required.</div>
-        </div>
-        <div class="section">
-            <label for="labels">Labels:</label>
-            <div id="labels-container"></div>
-            <button class="btn btn-secondary" onclick="addLabelField()">Add Label</button>
-            <button class="btn btn-secondary" onclick="addCommonLabel('io.containers.autoupdate', 'registry')">Add Autoupdate Label</button>
-            <button class="btn btn-secondary" onclick="addCommonLabel('project', 'myproject')">Add Project Label</button>
-            <small class="form-text text-muted">JSON object with labels for the container.</small>
-        </div>
-        <div class="section">
-            <label for="timezone">Timezone:</label>
-            <select class="form-control" id="timezone">
-                <!-- Timezone options will be dynamically populated -->
-            </select>
-            <small class="form-text text-muted">Set the timezone for the container.</small>
-            <input type="text" class="form-control mt-2 hidden" id="custom-timezone" placeholder="Enter custom timezone">
-        </div>
-        <div class="section">
-            <label>Ports:</label>
-            <div id="ports-container"></div>
-            <button class="btn btn-secondary" onclick="addPortField()">Add Port</button>
-            <small class="form-text text-muted">Map host ports to container ports.</small>
-        </div>
-        <div class="section">
-            <label>Mounts:</label>
-            <div id="mounts-container"></div>
-            <button class="btn btn-secondary" onclick="addMountField()">Add Mount</button>
-            <small class="form-text text-muted">Define volume mounts or bind mounts.</small>
-        </div>
-        <div class="section">
-            <label>Environment Variables:</label>
-            <div id="envs-container"></div>
-            <button class="btn btn-secondary" onclick="addEnvField()">Add Environment Variable</button>
-            <small class="form-text text-muted">Set environment variables for the container.</small>
-        </div>
-        <div class="section">
-            <button class="btn btn-primary" onclick="generateCommand()">Generate Podman Command</button>
-            <button class="btn btn-primary" onclick="generateQuadlet()">Generate Quadlet File</button>
-        </div>
-        <div id="output-container" class="hidden">
-            <div class="section">
-                <button class="btn btn-secondary" onclick="copyToClipboard('output')">Copy Podman Command</button>
-                <div id="output" class="command-output"></div>
+    <main class="shell">
+        <section class="hero">
+            <p class="eyebrow">Dependency-free static app</p>
+            <h1>Podman + Quadlet Builder</h1>
+            <p class="lede">
+                Build a copy-pasteable <code>podman run</code> command and a real Quadlet
+                <code>.container</code> file from the same form. The page stays easy to host on
+                GitHub Pages or GitLab Pages because it uses plain local HTML, CSS, and JavaScript assets.
+            </p>
+            <div class="hero-grid">
+                <article class="note">
+                    <strong>Quadlet-first output</strong>
+                    <p>
+                        Systemd-managed containers are generated as real <code>[Container]</code>
+                        units instead of wrapping a shell-style command inside <code>ExecStart=</code>.
+                    </p>
+                </article>
+                <article class="note">
+                    <strong>Registry auto-update caveat</strong>
+                    <p>
+                        <code>registry</code> auto-update needs a fully qualified image reference,
+                        so the generator normalizes plain Docker Hub names to <code>docker.io/...</code>.
+                    </p>
+                </article>
+                <article class="note">
+                    <strong>Rootless by default</strong>
+                    <p>
+                        Install hints default to <code>systemctl --user</code> and the rootless
+                        Quadlet search path. Switch to rootful if that matches your host.
+                    </p>
+                </article>
             </div>
+        </section>
+
+        <div class="workspace">
+            <form id="builder-form" class="stack" novalidate>
+                <section class="panel">
+                    <div class="panel-head">
+                        <div>
+                            <h2>Container Basics</h2>
+                            <p class="hint">Outputs update as you type. Name and image are the only required fields.</p>
+                        </div>
+                        <div class="panel-actions">
+                            <button class="secondary" type="button" data-action="load-example">Load example</button>
+                            <button class="ghost" type="button" data-action="reset-form">Reset</button>
+                        </div>
+                    </div>
+                    <div class="field-grid">
+                        <div class="field">
+                            <label for="name">Unit and container name</label>
+                            <input id="name" type="text" placeholder="jellyfin" autocomplete="off" spellcheck="false">
+                            <p class="hint">Used for <code>--name</code>, <code>&lt;name&gt;.container</code>, and <code>&lt;name&gt;.service</code>.</p>
+                        </div>
+                        <div class="field">
+                            <label for="description">Description</label>
+                            <input id="description" type="text" placeholder="Jellyfin media server" autocomplete="off">
+                            <p class="hint">Optional. Defaults to <code>&lt;name&gt; container</code>.</p>
+                        </div>
+                        <div class="field full">
+                            <label for="image">Image reference</label>
+                            <input id="image" type="text" placeholder="docker.io/jellyfin/jellyfin:latest" autocomplete="off" spellcheck="false">
+                            <p class="hint">Registry-qualified images are recommended. Docker Hub names are normalized in the generated output.</p>
+                        </div>
+                        <div class="field">
+                            <label for="target">Execution target</label>
+                            <select id="target">
+                                <option value="rootless">Rootless user unit</option>
+                                <option value="rootful">Rootful system unit</option>
+                            </select>
+                            <p class="hint">Changes the install path and the <code>systemctl</code> commands.</p>
+                        </div>
+                        <div class="field">
+                            <label for="autoupdate">Auto-update policy</label>
+                            <select id="autoupdate">
+                                <option value="disabled">Disabled</option>
+                                <option value="registry">Registry</option>
+                                <option value="local">Local</option>
+                            </select>
+                            <p class="hint"><code>registry</code> is best with an explicit registry and tag or digest.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-head">
+                        <div>
+                            <h2>Runtime Defaults</h2>
+                            <p class="hint">Keep the generated output opinionated but not overbearing.</p>
+                        </div>
+                    </div>
+                    <div class="field-grid">
+                        <div class="field">
+                            <label for="timezone">Timezone</label>
+                            <input id="timezone" type="text" list="timezones" placeholder="Leave blank to use host default" autocomplete="off" spellcheck="false">
+                            <datalist id="timezones"></datalist>
+                            <div class="button-row">
+                                <button class="subtle" type="button" data-action="use-browser-timezone">Use browser timezone</button>
+                            </div>
+                            <p class="hint">Uses <code>--tz</code> for <code>podman run</code> and <code>Timezone=</code> for Quadlet.</p>
+                        </div>
+                        <div class="field">
+                            <label for="userns">User namespace</label>
+                            <select id="userns">
+                                <option value="">Default</option>
+                                <option value="keep-id">keep-id</option>
+                                <option value="auto">auto</option>
+                                <option value="host">host</option>
+                            </select>
+                            <p class="hint">Leave unset unless you know you need a specific namespace mode.</p>
+                        </div>
+                        <div class="field">
+                            <label for="restartPolicy">Restart policy</label>
+                            <select id="restartPolicy">
+                                <option value="on-failure">on-failure</option>
+                                <option value="always">always</option>
+                                <option value="none">none</option>
+                            </select>
+                            <p class="hint">Mapped to both <code>--restart</code> and <code>Restart=</code>.</p>
+                        </div>
+                        <div class="field">
+                            <label for="timeoutStartSec">Quadlet startup timeout</label>
+                            <input id="timeoutStartSec" type="number" min="0" step="1" value="900" inputmode="numeric">
+                            <p class="hint">Useful when image pulls can exceed systemd’s 90 second default startup timeout.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-head">
+                        <div>
+                            <h2>Ports</h2>
+                            <p class="hint">Leave host port blank to let Podman choose one automatically.</p>
+                        </div>
+                        <div class="panel-actions">
+                            <button class="secondary" type="button" data-add="port">Add port</button>
+                        </div>
+                    </div>
+                    <div id="ports" class="collection"></div>
+                    <p id="ports-empty" class="collection-empty">No ports yet.</p>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-head">
+                        <div>
+                            <h2>Storage</h2>
+                            <p class="hint">Bind and named volumes become <code>Volume=</code>; tmpfs mounts become <code>Tmpfs=</code>.</p>
+                        </div>
+                        <div class="panel-actions">
+                            <button class="secondary" type="button" data-add="mount">Add mount</button>
+                        </div>
+                    </div>
+                    <div id="mounts" class="collection"></div>
+                    <p id="mounts-empty" class="collection-empty">No mounts yet.</p>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-head">
+                        <div>
+                            <h2>Environment</h2>
+                            <p class="hint">Environment values are written as <code>KEY=value</code> pairs.</p>
+                        </div>
+                        <div class="panel-actions">
+                            <button class="secondary" type="button" data-add="env">Add variable</button>
+                        </div>
+                    </div>
+                    <div id="envs" class="collection"></div>
+                    <p id="envs-empty" class="collection-empty">No environment variables yet.</p>
+                </section>
+
+                <section class="panel">
+                    <div class="panel-head">
+                        <div>
+                            <h2>Labels</h2>
+                            <p class="hint">Use general labels here. Auto-update is handled separately.</p>
+                        </div>
+                        <div class="panel-actions">
+                            <button class="secondary" type="button" data-add="label">Add label</button>
+                            <button class="warn" type="button" data-action="add-project-label">Add <code>project</code> label</button>
+                        </div>
+                    </div>
+                    <div id="labels" class="collection"></div>
+                    <p id="labels-empty" class="collection-empty">No labels yet.</p>
+                </section>
+            </form>
+
+            <aside class="stack">
+                <section class="panel">
+                    <div class="panel-head">
+                        <div>
+                            <h2>Review</h2>
+                            <p class="hint">Warnings here are about generated output, not hard errors.</p>
+                        </div>
+                    </div>
+                    <div class="badges">
+                        <span class="badge">Static assets only</span>
+                        <span class="badge">Quadlet-first</span>
+                        <span class="badge">Pages safe</span>
+                    </div>
+                    <div id="validation" class="alert" hidden>
+                        <ul id="validation-list"></ul>
+                    </div>
+                    <div id="notes" class="summary-list"></div>
+                </section>
+
+                <section class="panel output-panel">
+                    <div class="panel-head">
+                        <div>
+                            <h2>Podman Command</h2>
+                            <p class="meta">Generated from the same inputs as the Quadlet file.</p>
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <button class="primary" type="button" data-action="copy-command">Copy command</button>
+                    </div>
+                    <pre id="command-output">Fill in a name and image to generate a command.</pre>
+                </section>
+
+                <section class="panel output-panel">
+                    <div class="panel-head">
+                        <div>
+                            <h2>Quadlet File</h2>
+                            <p class="meta">Saved as <code>&lt;name&gt;.container</code>.</p>
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <button class="primary" type="button" data-action="copy-quadlet">Copy Quadlet</button>
+                        <button class="secondary" type="button" data-action="download-quadlet">Download <code>.container</code></button>
+                    </div>
+                    <pre id="quadlet-output">Fill in a name and image to generate a Quadlet file.</pre>
+                </section>
+
+                <section class="panel output-panel">
+                    <div class="panel-head">
+                        <div>
+                            <h2>Install Hints</h2>
+                            <p class="meta">Adjusted for rootless vs rootful deployment.</p>
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <button class="secondary" type="button" data-action="copy-install">Copy install steps</button>
+                    </div>
+                    <pre id="install-output">Install steps appear once the required fields are valid.</pre>
+                </section>
+
+                <p id="status" class="status" aria-live="polite"></p>
+            </aside>
         </div>
-        <div id="quadlet-output-container" class="hidden">
-            <div class="section">
-                <button class="btn btn-secondary" onclick="copyToClipboard('quadlet-output')">Copy Quadlet File</button>
-                <div id="quadlet-output" class="command-output"></div>
-                <button class="btn btn-secondary" onclick="downloadQuadlet()">Download Quadlet File</button>
-            </div>
-        </div>
-    </div>
 
-    <script>
-        // Function to populate timezone dropdown
-        function populateTimezones() {
-            const timezoneSelect = document.getElementById('timezone');
-            const timezones = [
-                'America/New_York',
-                'America/Chicago',
-                'America/Denver',
-                'America/Los_Angeles',
-                'America/Anchorage',
-                'Pacific/Honolulu',
-                'Europe/London',
-                'Europe/Paris',
-                'Asia/Tokyo',
-                'Australia/Sydney'
-                // Add more timezones as needed
-            ];
-            timezones.forEach(tz => {
-                const option = document.createElement('option');
-                option.value = tz;
-                option.textContent = `${tz} - ${new Date().toLocaleString('en-US', { timeZone: tz })}`;
-                timezoneSelect.appendChild(option);
-            });
-            timezoneSelect.value = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        <footer class="footer">
+            <span>Static site with local assets and no framework or CDN dependencies.</span>
+            <span>
+                <a href="https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html" target="_blank" rel="noreferrer">Quadlet docs</a>
+                ·
+                <a href="https://docs.podman.io/en/latest/markdown/podman-auto-update.1.html" target="_blank" rel="noreferrer">Auto-update docs</a>
+            </span>
+        </footer>
+    </main>
 
-            const customOption = document.createElement('option');
-            customOption.value = 'custom';
-            customOption.textContent = 'Other (Specify Below)';
-            timezoneSelect.appendChild(customOption);
-
-            timezoneSelect.addEventListener('change', () => {
-                document.getElementById('custom-timezone').classList.toggle('hidden', timezoneSelect.value !== 'custom');
-            });
-        }
-
-        // Add label field
-        function addLabelField(key = '', value = '') {
-            const container = document.getElementById('labels-container');
-            const div = document.createElement('div');
-            div.className = 'form-row align-items-center mb-2';
-            div.innerHTML = `
-                <div class="col">
-                    <input type="text" class="form-control" placeholder="Key" value="${key}">
+    <template id="port-template">
+        <div class="item-card" data-kind="port">
+            <div class="item-grid port">
+                <div class="field">
+                    <label>Host IP</label>
+                    <input type="text" data-field="hostIp" placeholder="0.0.0.0 or blank" spellcheck="false">
                 </div>
-                <div class="col">
-                    <input type="text" class="form-control" placeholder="Value" value="${value}">
+                <div class="field">
+                    <label>Host port</label>
+                    <input type="text" data-field="hostPort" placeholder="8096" inputmode="numeric" spellcheck="false">
                 </div>
-                <div class="col-auto">
-                    <button class="btn btn-danger remove-btn" onclick="removeField(this)">Remove</button>
+                <div class="field">
+                    <label>Container port</label>
+                    <input type="text" data-field="containerPort" placeholder="8096" inputmode="numeric" spellcheck="false">
                 </div>
-            `;
-            container.appendChild(div);
-        }
-
-        // Add common label
-        function addCommonLabel(key, value) {
-            addLabelField(key, value);
-        }
-
-        // Add port field
-        function addPortField() {
-            const container = document.getElementById('ports-container');
-            const div = document.createElement('div');
-            div.className = 'form-row align-items-center mb-2';
-            div.innerHTML = `
-                <div class="col">
-                    <input type="text" class="form-control" placeholder="Host Port">
-                </div>
-                <div class="col">
-                    <input type="text" class="form-control" placeholder="Container Port">
-                </div>
-                <div class="col">
-                    <select class="form-control">
+                <div class="field">
+                    <label>Protocol</label>
+                    <select data-field="protocol">
                         <option value="tcp">TCP</option>
                         <option value="udp">UDP</option>
                     </select>
                 </div>
-                <div class="col-auto">
-                    <button class="btn btn-danger remove-btn" onclick="removeField(this)">Remove</button>
-                </div>
-            `;
-            container.appendChild(div);
-        }
+                <button class="remove-button" type="button" data-remove>Remove</button>
+            </div>
+        </div>
+    </template>
 
-        // Add mount field
-        function addMountField() {
-            const container = document.getElementById('mounts-container');
-            const div = document.createElement('div');
-            div.className = 'form-row align-items-center mb-2';
-            div.innerHTML = `
-                <div class="col">
-                    <select class="form-control" onchange="updateMountOptions(this)">
+    <template id="mount-template">
+        <div class="item-card" data-kind="mount">
+            <div class="item-grid mount">
+                <div class="field">
+                    <label>Type</label>
+                    <select data-field="type">
                         <option value="bind">Bind</option>
                         <option value="volume">Volume</option>
                         <option value="tmpfs">Tmpfs</option>
                     </select>
                 </div>
-                <div class="col">
-                    <input type="text" class="form-control" placeholder="Source Path">
+                <div class="field" data-source-field>
+                    <label>Source</label>
+                    <input type="text" data-field="source" placeholder="/srv/app/data" spellcheck="false">
                 </div>
-                <div class="col">
-                    <input type="text" class="form-control" placeholder="Destination Path">
+                <div class="field">
+                    <label>Destination</label>
+                    <input type="text" data-field="destination" placeholder="/data" spellcheck="false">
                 </div>
-                <div class="col">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" value="ro=true">
-                        <label class="form-check-label">Read-only</label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="selinux-${container.children.length}" value="Z">
-                        <label class="form-check-label">Private (Z)</label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="selinux-${container.children.length}" value="z">
-                        <label class="form-check-label">Shared (z)</label>
-                    </div>
+                <div class="field">
+                    <label>Options</label>
+                    <input type="text" data-field="options" placeholder="ro,Z" spellcheck="false">
                 </div>
-                <div class="col-auto">
-                    <button class="btn btn-danger remove-btn" onclick="removeField(this)">Remove</button>
+                <button class="remove-button" type="button" data-remove>Remove</button>
+            </div>
+            <p class="hint mount-hint">Bind and volume mounts use <code>source:destination[:options]</code>.</p>
+        </div>
+    </template>
+
+    <template id="env-template">
+        <div class="item-card" data-kind="env">
+            <div class="item-grid pair">
+                <div class="field">
+                    <label>Variable</label>
+                    <input type="text" data-field="key" placeholder="TZ" spellcheck="false">
                 </div>
-            `;
-            container.appendChild(div);
-            updateMountOptions(div.querySelector('select'));
-        }
-
-        // Update mount options based on selected type
-        function updateMountOptions(select) {
-            const optionsContainer = select.parentElement.nextElementSibling.nextElementSibling.nextElementSibling;
-            const type = select.value;
-            const checkboxes = optionsContainer.querySelectorAll('.form-check-input');
-            if (type === 'volume' || type === 'tmpfs') {
-                checkboxes.forEach(checkbox => {
-                    checkbox.checked = false;
-                    checkbox.disabled = true;
-                });
-            } else {
-                checkboxes.forEach(checkbox => {
-                    checkbox.disabled = false;
-                });
-            }
-        }
-
-        // Add environment variable field
-        function addEnvField() {
-            const container = document.getElementById('envs-container');
-            const div = document.createElement('div');
-            div.className = 'form-row align-items-center mb-2';
-            div.innerHTML = `
-                <div class="col">
-                    <input type="text" class="form-control" placeholder="Variable Name">
+                <div class="field">
+                    <label>Value</label>
+                    <input type="text" data-field="value" placeholder="America/Los_Angeles" spellcheck="false">
                 </div>
-                <div class="col">
-                    <input type="text" class="form-control" placeholder="Value">
+                <button class="remove-button" type="button" data-remove>Remove</button>
+            </div>
+        </div>
+    </template>
+
+    <template id="label-template">
+        <div class="item-card" data-kind="label">
+            <div class="item-grid pair">
+                <div class="field">
+                    <label>Key</label>
+                    <input type="text" data-field="key" placeholder="project" spellcheck="false">
                 </div>
-                <div class="col-auto">
-                    <button class="btn btn-danger remove-btn" onclick="removeField(this)">Remove</button>
+                <div class="field">
+                    <label>Value</label>
+                    <input type="text" data-field="value" placeholder="homelab" spellcheck="false">
                 </div>
-            `;
-            container.appendChild(div);
-        }
+                <button class="remove-button" type="button" data-remove>Remove</button>
+            </div>
+        </div>
+    </template>
 
-        // Remove field
-        function removeField(button) {
-            button.parentElement.parentElement.remove();
-        }
-
-        // Validate and sanitize image name
-        function getImageName() {
-            const imageInput = document.getElementById('image');
-            let image = imageInput.value.trim();
-            if (!image.includes('/')) {
-                image = `docker.io/${image}`;
-            }
-            return image;
-        }
-
-        // Generate Podman command
-        function generateCommand() {
-            const image = getImageName();
-            const name = document.getElementById('name').value.trim();
-            const labels = document.getElementById('labels-container').querySelectorAll('.form-row');
-            const ports = document.getElementById('ports-container').querySelectorAll('.form-row');
-            const mounts = document.getElementById('mounts-container').querySelectorAll('.form-row');
-            const envs = document.getElementById('envs-container').querySelectorAll('.form-row');
-            const timezoneSelect = document.getElementById('timezone');
-            const customTimezone = document.getElementById('custom-timezone').value.trim();
-            const timezone = timezoneSelect.value === 'custom' ? customTimezone : timezoneSelect.value;
-
-            if (!image) {
-                document.getElementById('image-error').classList.remove('hidden');
-                return;
-            } else {
-                document.getElementById('image-error').classList.add('hidden');
-            }
-
-            if (!name) {
-                document.getElementById('name-error').classList.remove('hidden');
-                return;
-            } else {
-                document.getElementById('name-error').classList.add('hidden');
-            }
-
-            if (!timezone) {
-                alert('Please select or enter a timezone.');
-                return;
-            }
-
-            let command = `podman run \\\n --detach \\\n --name ${name} \\\n`;
-
-            labels.forEach(labelRow => {
-                const key = labelRow.children[0].children[0].value.trim();
-                const value = labelRow.children[1].children[0].value.trim();
-                if (key && value) {
-                    command += ` --label "${key}=${value}" \\\n`;
-                }
-            });
-
-            ports.forEach(portRow => {
-                const hostPort = portRow.children[0].children[0].value.trim();
-                const containerPort = portRow.children[1].children[0].value.trim();
-                const protocol = portRow.children[2].children[0].value.trim();
-                if (hostPort && containerPort) {
-                    command += ` --publish ${hostPort}:${containerPort}/${protocol} \\\n`;
-                }
-            });
-
-            mounts.forEach(mountRow => {
-                const type = mountRow.children[0].children[0].value.trim();
-                const source = mountRow.children[1].children[0].value.trim();
-                const destination = mountRow.children[2].children[0].value.trim();
-                const options = Array.from(mountRow.children[3].querySelectorAll('.form-check-input:checked'))
-                    .filter(cb => !cb.disabled)
-                    .map(cb => cb.value)
-                    .join(',');
-                if (type && source && destination) {
-                    command += ` --mount type=${type},source=${source},destination=${destination}${options ? ',' + options : ''} \\\n`;
-                }
-            });
-
-            envs.forEach(envRow => {
-                const variable = envRow.children[0].children[0].value.trim();
-                const value = envRow.children[1].children[0].value.trim();
-                if (variable && value) {
-                    command += ` --env ${variable}=${value} \\\n`;
-                }
-            });
-
-            command += ` --env TZ=${timezone} \\\n`;
-            command += ` --rm \\\n --user $(id -u):$(id -g) \\\n --userns keep-id \\\n ${image}`;
-
-            document.getElementById('output').textContent = command;
-            document.getElementById('output-container').classList.remove('hidden');
-        }
-
-        // Generate Quadlet file
-        function generateQuadlet() {
-            const name = document.getElementById('name').value.trim();
-            const command = document.getElementById('output').textContent;
-            if (!command) {
-                alert('Please generate the Podman command first.');
-                return;
-            }
-            const quadletContent = `[Unit]
-Description=${name}
-
-[Service]
-ExecStart=${command.replace(/ \\\n/g, ' ')}
-
-[X-Podman]
-PodmanArguments=
-`;
-
-            document.getElementById('quadlet-output').textContent = quadletContent;
-            document.getElementById('quadlet-output-container').classList.remove('hidden');
-        }
-
-        // Copy to clipboard
-        function copyToClipboard(elementId) {
-            const content = document.getElementById(elementId).textContent;
-            navigator.clipboard.writeText(content).then(() => {
-                alert(`Copied ${elementId === 'output' ? 'Podman Command' : 'Quadlet File'} to clipboard`);
-            }).catch(err => {
-                alert('Failed to copy: ', err);
-            });
-        }
-
-        // Download Quadlet file
-        function downloadQuadlet() {
-            const content = document.getElementById('quadlet-output').textContent;
-            const name = document.getElementById('name').value.trim();
-            const blob = new Blob([content], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${name}.service`;
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-
-        // Initialize page
-        document.addEventListener('DOMContentLoaded', () => {
-            populateTimezones();
-        });
-    </script>
+    <script src="app.js"></script>
 </body>
 </html>
